@@ -1,0 +1,159 @@
+---
+title: "Exploring the BRFSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(gridExtra)
+library(ggplot2)
+library(dplyr)
+library(maps)
+library(evaluate)
+
+```
+
+### Load data
+
+
+```{r load-data}
+load("brfss2013.RData")
+```
+
+
+
+* * *
+
+## Part 1: Data
+The Behavioral Risk Factor Surveillance System (BRFSS) is a collaborative project between all of the states in the United States (US) and participating US territories and the Centers for Disease Control and Prevention (CDC).
+
+he BRFSS objective is to collect uniform, state-specific data on preventive health practices and risk behaviors that are linked to chronic diseases, injuries, and preventable infectious diseases that affect the adult population. Factors assessed by the BRFSS in 2013 include tobacco use, HIV/AIDS knowledge and prevention, exercise, immunization, health status, healthy days — health-related quality of life, health care access, inadequate sleep, hypertension awareness, cholesterol awareness, chronic health conditions, alcohol consumption, fruits and vegetables consumption, arthritis burden, and seatbelt use. Since 2011, BRFSS conducts both landline telephone- and cellular telephone-based surveys.
+
+### Generalizability
+
+The data was gathered randomly sampling an adult from each household or residence. There might be some convenience bias present, as people called to landline might not have been home, or people called to cellular phone might not to choose to answer to a call from an unknown number. Also, in this kind of phone survey, people's answer might be differ from the actual for various reasons: they might not remember correctly, they don't want to answer to intimate health questions truthfully etc. However, we can safely assume that the study's results are quite well generalizable.
+
+### Causality
+
+BRFSS study was an observational study and only correlational statements can be inferred from the study.
+
+* * *
+
+## Part 2: Research questions
+
+In this study we examine how tobacco use associates with different demographics and health outcomes.
+
+**Research quesion 1:**
+
+How does tobacco use, measured by every day smoking  vary by state and gender?
+
+**Research quesion 2:**
+
+How does tobacco use, measured by every day smoking associate with number of days with no good physical health?
+
+**Research quesion 3:**
+
+How does education level associate with everyday smoking?
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+
+
+**Research quesion 1:**
+
+First we examine the frequency of days now smoking.
+
+```{r}
+summary(brfss2013$smokday2)
+
+```
+
+We convert the data two levels; smoking everyday and not smoking everyday and removeve missing values:
+
+```{r}
+brfss_c <-brfss2013 %>% mutate(smoke_everyday = as.factor(ifelse(smokday2 =='Every day', 'yes', 'no')))
+brfss_c <- brfss_c %>% filter(!is.na(smoke_everyday))
+```
+
+Then we plot the share of everyday smokers per US state and gender:
+
+```{r}
+brfss_c<- brfss_c %>%
+        filter(!is.na(brfss_c$sex))
+
+
+
+brfss_men <- brfss_c %>% filter(brfss_c$sex=='Male')
+brfss_women <- brfss_c %>% filter(brfss_c$sex=='Female')
+
+smoke_all <- data.frame(smoke= brfss_c$smoke_everyday,
+                         state = tolower(brfss_c$X_state),
+                         gender = brfss_c$sex)
+smoke_men <- data.frame(smoke= brfss_men$smoke_everyday,
+                         state = tolower(brfss_men$X_state),
+                         gender = brfss_men$sex)
+smoke_women <- data.frame(smoke= brfss_women$smoke_everyday,
+                           state = tolower(brfss_women$X_state),
+                           gender = brfss_women$sex)
+
+smoke_all_state <- smoke_all %>% group_by(state) %>% summarize(mean= mean(smoke=='yes'))
+smoke_men_state <- smoke_men %>% group_by(state) %>% summarize(mean= mean(smoke=='yes'))
+smoke_women_state <- smoke_women %>% group_by(state) %>% summarize(mean= mean(smoke=='yes'))
+
+states <- map_data('state')
+
+map_all <- ggplot(smoke_all_state, aes(fill = mean)) + 
+        geom_map(aes(map_id = state), map = states) + expand_limits(x = states$long, y = states$lat) +
+        ggtitle('Share of everyday smokers') +
+        guides(fill=guide_legend(title="Share"))
+
+map_men <- ggplot(smoke_men_state, aes(fill = mean)) + 
+        geom_map(aes(map_id = state), map = states) + expand_limits(x = states$long, y = states$lat) +
+        ggtitle('Share of everyday smokers (men)') +
+        guides(fill=guide_legend(title="Count"))
+
+map_women <- ggplot(smoke_women_state, aes(fill = mean)) + 
+        geom_map(aes(map_id = state), map = states) + expand_limits(x = states$long, y = states$lat) +
+        ggtitle('Share of everyday smokers (women)') +
+        guides(fill=guide_legend(title="Count"))
+
+map_all
+map_men
+map_women
+```
+
+We can see that for both men and women the share of population smoking everyday seems to be lowest in California and in North Eastern states.
+
+**Research quesion 2:**
+
+Next we examine the association of frequency of smoking to number of days with no good physical health.
+
+```{r}
+ggplot(data=brfss_c, aes(x=smokday2, y=physhlth, fill=sex)) + geom_boxplot()
+by(brfss_c$physhlth, brfss_c$smokday, summary)
+
+```
+
+First, we can see that the data is right skewed. For all groups median is zero. There is no big difference in means between groups that smoke every day and some days, but for the group that does not smoke at all the mean is considerable lower than for the other two groups. This indicates that smoking is associated with adverse health effects. Women tend to have more days in not good physical health than men in all smoking frequency groups.
+
+
+**Research quesion 3:**
+
+Finally we will explore how education level is associated with smoking every day. 
+
+```{r}
+ggplot(data=brfss_c,  aes(x= educa, fill=smoke_everyday)) + geom_bar(position='fill') + coord_flip() + 
+                scale_y_continuous() +
+                labs(y='share of everyday smokers', x='education level')
+```
+
+The group with education level 'some high school' seems to have the highest share of every day smokers. There seems not be direct relationship with the education level and smoking; the groups having middle level education seem to have higher shares of smokers, while as both highest and lowest education levels have less every day smokers.
